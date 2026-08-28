@@ -9,7 +9,10 @@
   "files": [
     "bin",
     "src",
-    "README.md"
+    "supabase",
+    "README.md",
+    "DEVELOPER_GUIDE.md",
+    "trust-hook.config.example.json"
   ],
   "engines": {
     "node": ">=14"

@@ -94,7 +94,16 @@ Everyone after that just runs the same command too — see below.
 
 ## Using it as a developer
 
-Once a project is connected (or even before — it just runs in dry-run mode until then), every developer's install is the same single command, run once from wherever the tool's files live in their clone:
+Don't have the `trust-hook/` folder in your project yet? Grab it into your project root:
+
+```sh
+cd /path/to/your-project
+npx degit shifat71/data-collection-tool-for-research trust-hook
+```
+
+(See [Setup, step 1](#setup--connecting-a-project) for a `git clone`-based alternative if you'd rather not run a third-party package.)
+
+Already there (most common — someone on your team added it)? Once a project is connected (or even before — it just runs in dry-run mode until then), every developer's install is the same single command, run once from wherever the tool's files live in their clone:
 
 ```sh
 npx ./trust-hook

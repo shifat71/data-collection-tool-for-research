@@ -78,18 +78,17 @@ Because everything lives nested inside `trust-hook/`, it can't collide with your
 2. Open **SQL Editor** in the dashboard, paste in [`supabase/schema.sql`](./supabase/schema.sql), and run it. This creates the `participants` table (registrations, gated by your manual approval) and the `trust_events` table (survey rows, gated by an approved `participants` match) — both with a Row Level Security policy that restricts the anon key to `INSERT` only.
 3. **Keep the URL and key private — do not commit them anywhere in this public repo.** Insert-only still means *anyone holding the key* can submit rows; RLS stops them from reading, editing, or deleting data, but not from spamming fake entries into your dataset — the approval gate on `trust_events` is what actually stops that. Share the two values with your team through a private channel instead (Slack DM, password manager, etc.) — see [Privacy and security](#privacy-and-security).
 
-### 3. Install, connect, and approve your team
-
-From wherever the tool's files live — the repo root if you're here directly, or the `trust-hook/` subfolder if you copied it into another project:
+### 3. Connect the project — before any developer installs
 
 ```sh
-npx .          # from inside the tool's own folder
-npx ./trust-hook   # equivalently, from one level up (e.g. your project root)
+npx ./trust-hook configure
 ```
 
-The first person to run this in a repo is offered the chance to enter the Supabase URL and anon key from step 2 inline. It saves them to `trust-hook.config.json` and installs the hook in the same step. This file is **git-ignored** — it stays on your machine only. Every other developer runs the exact same command and, when asked, pastes in the same URL/key you shared with them privately.
+Paste in the Project URL and anon key from step 2. It saves them to `trust-hook.config.json` — **git-ignored**, stays on this machine only — and runs a connectivity check.
 
-Every developer's install also registers them in `participants` (see [Setup, step 2](#setup--connecting-a-project)). As the maintainer, open the **Table Editor → participants** in Supabase, find each teammate's row by username, and flip `approved` to `true` once you recognize them. Until then, their commits still trigger the survey locally and queue the results — nothing is lost, it just doesn't reach `trust_events` until you approve them.
+**Do this before a developer's trial starts, not as a fallback during their install.** Either run `configure` yourself on each developer's machine, or share the URL and anon key with them through a private channel (Slack DM, password manager, etc.) and have them run the same `configure` command themselves first. Either way, by the time someone runs the actual install command below, Supabase should already be connected — installing is then a single command with zero Supabase prompts.
+
+As developers install (see [Using it as a developer](#using-it-as-a-developer)), each one registers themselves in `participants`. Open **Table Editor → participants** in Supabase, find each teammate's row by username, and flip `approved` to `true` once you recognize them — their submissions start counting the moment you do.
 
 ## Using it as a developer
 
@@ -102,7 +101,7 @@ npx degit shifat71/data-collection-tool-for-research trust-hook
 
 (See [Setup, step 1](#setup--connecting-a-project) for a `git clone`-based alternative if you'd rather not run a third-party package.)
 
-Already there (most common — someone on your team added it)? Every developer's install is the same single command, run once from wherever the tool's files live in their clone:
+**Before you install, Supabase should already be connected** — your project maintainer either set it up for you, or asked you to run `npx ./trust-hook configure` yourself first with a URL/key they gave you privately (never via `git pull` — see [Privacy and security](#privacy-and-security)). Once that's done, install is the same single command, run once from wherever the tool's files live in your clone:
 
 ```sh
 npx ./trust-hook
@@ -110,9 +109,9 @@ npx ./trust-hook
 
 (If the tool sits at the root of the repo you're in — as it does in this repository itself — that's `npx .` instead.)
 
-It'll ask for a participant alias the first time only — it defaults to your `git config user.name`, so pressing Enter is enough — plus a few optional details (full name, email, team/role, company) that just help your maintainer recognize you; press Enter to skip any of them. If nobody on your machine has set up Supabase for this repo yet, it'll also ask for the Project URL and anon key; **ask your project maintainer for these two values privately** (Slack, email, etc.) — they're never committed to the repo, so `git pull` alone won't get them to you. Once entered, that's a one-time step per machine.
+It'll ask for a participant alias the first time only — it defaults to your `git config user.name`, so pressing Enter is enough — plus a few optional details (full name, email, team/role, company) that just help your maintainer recognize you; press Enter to skip any of them. That's a one-time step per machine, and it also registers you with the project. Your maintainer approves new registrations manually in Supabase — until they do, your survey answers still get asked and saved locally exactly like an offline commit, and start counting automatically the moment you're approved. No message, no blocking, nothing to redo.
 
-This also registers you with the project. Your maintainer approves new registrations manually in Supabase — until they do, your survey answers still get asked and saved locally exactly like an offline commit, and start counting automatically the moment you're approved. No message, no blocking, nothing to redo.
+Didn't get connected first and installed anyway? It still works — the hook just runs in dry-run mode until you (or your maintainer) run `npx ./trust-hook configure`, at which point your very next commit registers you and starts submitting for real, with no need to reinstall.
 
 From then on, every `git commit` triggers a short survey:
 
@@ -136,9 +135,9 @@ The full walkthrough of this section, without the setup material above, is in th
 
 | Command | Effect |
 |---|---|
-| `npx ./trust-hook` (or `npx .` from inside the tool's own folder) | Install the hook. First run in a repo also offers to connect Supabase. |
+| `npx ./trust-hook configure` | Connect (or rotate) this project's Supabase credentials. Run this first, before any developer installs. |
+| `npx ./trust-hook` (or `npx .` from inside the tool's own folder) | Install the hook. Expects Supabase to already be connected. |
 | `npx ./trust-hook init` | Same as above (explicit form). |
-| `npx ./trust-hook configure` | Set or rotate this project's Supabase credentials without touching the hook install. |
 | `npx ./trust-hook uninstall` | Remove the hook from `.git/hooks/`. Restores any pre-existing `post-commit` hook that was backed up on install. |
 
 ## Data collection

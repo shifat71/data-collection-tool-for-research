@@ -7,7 +7,7 @@ const os = require('os');
 const { execSync } = require('child_process');
 
 const config = require('../src/config');
-const { colors, createPrompt, ask, askYesNo } = require('../src/prompt');
+const { colors, createPrompt, ask } = require('../src/prompt');
 const { sendToSupabase } = require('../src/sender');
 
 const HOOK_TEMPLATE_PATH = path.join(__dirname, '..', 'src', 'hook-script.sh');
@@ -136,8 +136,8 @@ async function registerParticipant(projectConfig, personal) {
 
 // Developer-facing, single step: install the hook. Project credentials
 // live in a git-ignored local file (not committed — see promptAndWrite-
-// ProjectConfig) - a developer either enters values shared with them
-// privately by the project maintainer, or is the one setting it up.
+// ProjectConfig) that the maintainer is expected to have set up via
+// `configure` before a developer ever runs this.
 async function init() {
   const gitDir = findGitDir();
   if (!gitDir) {
@@ -148,24 +148,19 @@ async function init() {
   console.log(`${colors.bold}${colors.cyan}trust-hook setup${colors.reset}`);
   console.log(`${colors.dim}Installs a post-commit hook that asks a few quick questions about AI-assisted coding.${colors.reset}\n`);
 
+  // Supabase is expected to already be connected by the time anyone runs
+  // this - the project maintainer sets trust-hook.config.json up (via
+  // `configure`) before a developer's trial starts, since it's git-ignored
+  // and so can't arrive via `git pull`. If it's genuinely missing, don't
+  // stop to ask - install still succeeds in dry-run mode, and `configure`
+  // remains the one command that fixes it, run whenever it's ready.
   const repoRoot = config.findProjectRoot();
-  let projectConfig = config.readProjectConfig(repoRoot);
+  const projectConfig = config.readProjectConfig(repoRoot);
   if (projectConfig && projectConfig.supabaseUrl) {
     console.log(`${colors.green}✓${colors.reset} Found project Supabase config at ${colors.dim}${config.PROJECT_CONFIG_FILENAME}${colors.reset} — nothing else to set up.`);
   } else {
-    // This file is git-ignored (the repo may be public), so it's never
-    // picked up via git pull — every developer sets it up locally, once,
-    // either creating the Supabase project themselves or pasting in the
-    // URL/key their project maintainer shared with them privately.
-    console.log(`${colors.yellow}No local ${config.PROJECT_CONFIG_FILENAME} found for this repo.${colors.reset}`);
-    const rl = createPrompt();
-    const wantsSetup = await askYesNo(rl, `${colors.cyan}Enter Supabase credentials now? (y/n)${colors.reset} ${colors.dim}(ask your project maintainer if you don't have them)${colors.reset} `);
-    rl.close();
-    if (wantsSetup) {
-      projectConfig = await promptAndWriteProjectConfig(repoRoot, projectConfig || {});
-    } else {
-      console.log(`${colors.dim}Skipping — the hook will run in dry-run mode (prints the payload instead of sending it) until you run ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.dim}.${colors.reset}`);
-    }
+    console.log(`${colors.yellow}No local ${config.PROJECT_CONFIG_FILENAME} found for this repo — running in dry-run mode.${colors.reset}`);
+    console.log(`${colors.dim}Ask your project maintainer for the Supabase URL and anon key, then run ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.dim}.${colors.reset}`);
   }
 
   let personal = config.readConfig();
@@ -260,9 +255,9 @@ function uninstall() {
 function printHelp() {
   console.log(`${colors.bold}trust-hook${colors.reset} — developer trust measurement tool\n`);
   console.log('Usage:');
-  console.log('  npx ./trust-hook              Install the hook (default). First run in a repo also offers to connect Supabase.');
+  console.log('  npx ./trust-hook              Install the hook (default). Expects Supabase to already be connected — run `configure` first if not.');
   console.log('  npx ./trust-hook init         Same as above');
-  console.log('  npx ./trust-hook configure    Set or rotate this project\'s Supabase credentials without touching the hook install');
+  console.log('  npx ./trust-hook configure    Set or rotate this project\'s Supabase credentials — run this before a developer\'s first install');
   console.log('  npx ./trust-hook uninstall    Remove the hook from this repo');
 }
 

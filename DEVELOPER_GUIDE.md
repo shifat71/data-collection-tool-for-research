@@ -15,7 +15,7 @@ cd /path/to/your-project
 npx degit shifat71/data-collection-tool-for-research trust-hook
 ```
 
-Already there (most common — someone on your team added it)? Skip straight to installing the hook, from your project root:
+Already there, and your maintainer has told you Supabase is connected for this project? Skip straight to installing the hook, from your project root:
 
 ```sh
 npx ./trust-hook
@@ -27,7 +27,7 @@ The first time, it asks for a **participant alias** — any string you choose to
 
 This also registers you with the project's Supabase database. **A maintainer has to manually approve you before your survey answers actually land in the dataset** — until then, everything still runs exactly the same on your end, your answers just queue locally and start counting automatically the moment you're approved. No message, no blocking, nothing to redo.
 
-If the project isn't connected to Supabase yet, the install still finishes and installs the hook — it just runs in **dry-run mode** (prints what it would send instead of sending it) until someone connects it. That's not something you need to fix yourself; ping your project maintainer.
+Supabase should already be connected by the time you run this — your maintainer sets that up before your trial starts, since it can't be shared via `git pull` (see the main README). If it somehow isn't yet, the install still finishes and installs the hook — it just runs in **dry-run mode** (prints what it would send instead of sending it) until it's connected. That's not something you need to fix yourself; ping your project maintainer, and once they (or you, if they hand you the credentials) run `npx ./trust-hook configure`, your next commit picks it up automatically — no reinstall needed.
 
 ## What happens after a commit
 

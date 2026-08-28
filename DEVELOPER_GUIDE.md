@@ -8,13 +8,20 @@ A git `post-commit` hook. After every commit, it asks two quick questions about 
 
 ## Install
 
-From the root of the project (wherever `trust-hook/` lives in it):
+Don't have the `trust-hook/` folder in your project yet? Grab it into your project root:
+
+```sh
+cd /path/to/your-project
+npx degit shifat71/data-collection-tool-for-research trust-hook
+```
+
+Already there (most common — someone on your team added it)? Skip straight to installing the hook, from your project root:
 
 ```sh
 npx ./trust-hook
 ```
 
-That's the whole install. No `npm install`, nothing downloaded — it runs directly out of the folder already in your clone.
+That's the whole install. No `npm install`, nothing else downloaded — it runs directly out of the folder already in your clone.
 
 The only thing it may ask is a **participant alias** — any string you choose to identify your own commits anonymously in the dataset. It's asked once, ever, on your machine: saved to `~/.trust-hook/config.json` and reused automatically the next time you install the hook in a different project.
 

@@ -2,52 +2,31 @@
 
 A developer trust measurement tool. It installs a git `post-commit` hook that asks a few quick questions about whether — and how — you used AI assistance for each commit, then sends the answers to Supabase for research analysis.
 
-Credentials are configured once at the **project level** and committed to the repo, so individual developers never touch Supabase URLs or keys — installing the hook is a single command with nothing to type beyond an optional alias.
-
-## Project owner: one-time setup
-
-### 1. Get a Supabase project
-
-- Go to [supabase.com](https://supabase.com), sign in, and click **New project** (the free tier is plenty for this). Pick an org, name, database password, and region, then wait ~2 minutes for it to provision.
-- In the project dashboard: **Settings → API** gives you the two values you need — the **Project URL** and the **anon / public key**. (Prefer local dev/testing instead of a hosted project? The [Supabase CLI](https://supabase.com/docs/guides/local-development) — `supabase init && supabase start` — runs the whole stack in Docker and prints the same two values for `http://localhost:...`.)
-
-### 2. Create the table
-
-Open **SQL Editor** in the dashboard, paste the contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. It creates the `trust_events` table the hook writes to, plus a Row Level Security policy that lets the public anon key *insert* rows but never read/update/delete them — that's what makes it safe to commit the anon key in the next step.
-
-### 3. Connect it to trust-hook
-
-Run this once, from the repo root, after the `trust-hook/` folder has been added to the project:
-
-```sh
-npx ./trust-hook configure
-```
-
-Paste in the Project URL and anon key from step 1. It saves them to `trust-hook.config.json` at the repo root and runs a connectivity check. Commit the file so every developer gets it for free:
-
-```sh
-git add trust-hook.config.json && git commit -m "Configure trust-hook"
-```
-
-Supabase anon keys are meant to be public (protected by your Row Level Security policies), so this is safe to commit — same as it's safe to ship in a client app. Make sure your `trust_events` table has an RLS policy that allows inserts from the anon role and nothing else.
-
-## Developers: one-step install
-
-From the repo root (after cloning/pulling, so `trust-hook.config.json` is already there):
+**There is exactly one command, for everyone.** Drop the `trust-hook/` folder into a project's repo, commit it, and from then on anyone on the team just runs:
 
 ```sh
 npx ./trust-hook
 ```
 
-That's it — single command, no flags, no prompts for credentials. It will:
+- **First person to run it in a repo** (usually whoever owns the project): it notices there's no Supabase connection yet, offers to set one up right there in the same command (paste in a Project URL + anon key — see below for where to get them), saves it to `trust-hook.config.json`, and installs the hook.
+- **Everyone after that**: the command notices the project is already connected and skips straight to installing the hook — the only thing it might ask is a participant alias, and only the very first time on your machine.
 
-1. Ask for a participant alias the first time only (any string, used to identify your commits anonymously) — press Enter to accept the suggested default (your `git config user.name`). It's saved to `~/.trust-hook/config.json` and reused automatically for every repo you instrument, so on every repo after the first, this step is skipped entirely.
-2. Pick up the project's Supabase credentials automatically from `trust-hook.config.json` (no project config yet? the hook just runs in **dry-run mode** — prints the payload to stdout instead of sending it — until the project owner runs `configure`).
-3. Copy the post-commit hook into `.git/hooks/post-commit` and make it executable.
+No `npm install`, no network fetch, no registry, no separate "configure" step to remember — it runs directly out of the `trust-hook/` folder already in your working copy, and Node.js built-ins only (`readline`, `fs`, `path`, `https`, `tty`, `child_process`) — zero dependencies.
 
-No `npm install`, no network fetch, no registry — it runs directly out of the `trust-hook/` folder already in your working copy. Only Node.js built-ins are used (`readline`, `fs`, `path`, `https`, `tty`, `child_process`) — zero dependencies.
+## Getting a Supabase project ready
 
-After that, every `git commit` in that repo prompts you with a couple of quick questions once the commit completes.
+You need this once per project, before (or during) the first `npx ./trust-hook` run above.
+
+1. Go to [supabase.com](https://supabase.com), sign in, and click **New project** (the free tier is plenty for this). Pick an org, name, database password, and region, then wait ~2 minutes for it to provision. In the project dashboard, **Settings → API** gives you the two values you'll be asked for — the **Project URL** and the **anon / public key**. (Prefer local dev/testing? The [Supabase CLI](https://supabase.com/docs/guides/local-development) — `supabase init && supabase start` — runs the whole stack in Docker and prints the same two values for `http://localhost:...`, though that's only reachable from your own machine, not your teammates'.)
+2. Open **SQL Editor** in the dashboard, paste the contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. It creates the `trust_events` table the hook writes to, plus a Row Level Security policy that lets the public anon key *insert* rows but never read/update/delete them — that's what makes it safe to commit the anon key.
+
+Once you have those two values, run `npx ./trust-hook` (above) and paste them in when asked. It saves them to `trust-hook.config.json` at the repo root and runs a connectivity check — commit that file so every teammate picks it up automatically:
+
+```sh
+git add trust-hook.config.json && git commit -m "Configure trust-hook"
+```
+
+Nobody has the credentials yet and you just want the hook installed for now? Answer "n" when asked to connect — the hook installs anyway and runs in **dry-run mode** (prints the payload instead of sending it) until someone connects it later. Need to rotate the key or reconnect a project later without touching the hook install? `npx ./trust-hook configure` does just that step on its own.
 
 ## Uninstall
 

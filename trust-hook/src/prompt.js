@@ -25,4 +25,13 @@ function ask(rl, question) {
   });
 }
 
-module.exports = { colors, createPrompt, ask };
+async function askYesNo(rl, question) {
+  for (;;) {
+    const answer = (await ask(rl, question)).toLowerCase();
+    if (answer === 'y' || answer === 'yes') return true;
+    if (answer === 'n' || answer === 'no') return false;
+    console.log(`${colors.red}Please answer y or n.${colors.reset}`);
+  }
+}
+
+module.exports = { colors, createPrompt, ask, askYesNo };

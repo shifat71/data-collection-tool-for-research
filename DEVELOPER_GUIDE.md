@@ -1,6 +1,6 @@
 # trust-hook — Developer Guide
 
-This is the guide for **using** trust-hook on a project that already has it. If you need to set the tool up for a project for the first time (connect a Supabase project, create the database table), see the [main README](../README.md) instead — this page assumes that's already done, or that someone else will do it.
+This is the guide for **using** trust-hook on a project that already has it. If you need to set the tool up for a project for the first time (connect a Supabase project, create the database table), see the [main README](./README.md) instead — this page assumes that's already done, or that someone else will do it.
 
 ## What it is
 
@@ -55,7 +55,7 @@ Handy for rapid-fire WIP commits you don't want to interrupt.
 
 ## What data leaves your machine
 
-Only what you see in the prompts, plus a few things pulled automatically from git for that one commit: the short commit hash, commit message, changed file extensions, a timestamp, and the repo name. No file contents, no diffs, nothing beyond that. See [Data collection](../README.md#data-collection) in the main README for the exact schema if you want the full picture.
+Only what you see in the prompts, plus a few things pulled automatically from git for that one commit: the short commit hash, commit message, changed file extensions, a timestamp, and the repo name. No file contents, no diffs, nothing beyond that. See [Data collection](./README.md#data-collection) in the main README for the exact schema if you want the full picture.
 
 ## Uninstall
 

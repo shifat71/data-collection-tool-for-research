@@ -48,7 +48,15 @@ On every `git commit`, the hook auto-captures commit metadata from git, asks two
 
 Already working in this repository? `trust-hook/` is already at the root — skip to step 2.
 
-Bringing it into a *different* project: clone this repo and copy the `trust-hook/` folder into that project's root.
+Bringing it into a *different* project — grab just the `trust-hook/` folder (no full repo, no `.git` history) using [degit](https://github.com/Rich-Harris/degit), run once via `npx`:
+
+```sh
+cd /path/to/your-project
+npx degit shifat71/data-collection-tool-for-research/trust-hook trust-hook
+git add trust-hook && git commit -m "Add trust-hook"
+```
+
+Would rather not run a third-party package to fetch it? A plain `git clone` works too — it pulls the whole repo locally, but there's nothing else in it to worry about:
 
 ```sh
 git clone https://github.com/shifat71/data-collection-tool-for-research.git
@@ -57,7 +65,7 @@ cd /path/to/your-project
 git add trust-hook && git commit -m "Add trust-hook"
 ```
 
-That's the only file-transfer step, ever — everything after this is a single command.
+Either way, that's the only file-transfer step, ever — everything after this is a single command.
 
 ### 2. Create a Supabase project and table
 

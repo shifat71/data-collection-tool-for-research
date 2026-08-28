@@ -65,9 +65,23 @@ const AI_TOOLS = [
   ['Other', 'other'],
 ];
 
-function readConfig() {
+// Personal config: just the developer's alias, set once via `init` and
+// shared across every repo they instrument.
+function readPersonalConfig() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  } catch (e) {
+    return null;
+  }
+}
+
+// Project config: Supabase credentials, committed to the repo by the
+// project owner. Read fresh on every commit (never baked into this hook
+// file) so a credential rotation just needs a `git pull`, not a reinstall.
+function readProjectConfig(repoRoot) {
+  if (!repoRoot) return null;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(repoRoot, 'trust-hook.config.json'), 'utf8'));
   } catch (e) {
     return null;
   }
@@ -102,6 +116,7 @@ function collectAutoData() {
   });
 
   return {
+    repo_root: repoRoot,
     commit_hash: commitHash,
     commit_message: commitMessage,
     repo_name: repoName,
@@ -252,16 +267,22 @@ async function askYesNo(rl, question) {
 }
 
 async function main() {
-  const config = readConfig();
-  if (!config) {
-    // Not configured (run `npx trust-hook init`) - stay silent, don't nag.
+  const personal = readPersonalConfig();
+  if (!personal || !personal.participantAlias) {
+    // Not configured (run `npx ./trust-hook init`) - stay silent, don't nag.
     process.exit(0);
   }
 
+  const auto = collectAutoData();
+  const project = readProjectConfig(auto.repo_root);
+  const config = {
+    participantAlias: personal.participantAlias,
+    supabaseUrl: project ? project.supabaseUrl : '',
+    supabaseAnonKey: project ? project.supabaseAnonKey : '',
+  };
+
   // Best-effort: clear out anything queued from a previous commit.
   await flushQueue(config);
-
-  const auto = collectAutoData();
 
   // Git runs post-commit hooks with stdin connected to /dev/null, so
   // process.stdin can't be used for prompts — open the controlling

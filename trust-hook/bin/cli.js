@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execSync } = require('child_process');
 
 const config = require('../src/config');
@@ -26,6 +27,83 @@ function findGitDir() {
   }
 }
 
+function defaultAlias() {
+  try {
+    const name = execSync('git config user.name', {
+      encoding: 'utf8',
+      cwd: process.cwd(),
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (name) return name;
+  } catch (e) {
+    // fall through
+  }
+  try {
+    return os.userInfo().username;
+  } catch (e) {
+    return '';
+  }
+}
+
+// Project owner, run once per repo: stores Supabase credentials in a file
+// meant to be committed, so every developer gets them for free just by
+// cloning/pulling — nothing for individual developers to configure.
+async function configureProject() {
+  const repoRoot = config.findProjectRoot();
+  if (!repoRoot) {
+    console.error(`${colors.red}Error:${colors.reset} not inside a git repository.`);
+    process.exit(1);
+  }
+
+  console.log(`${colors.bold}${colors.cyan}trust-hook project setup${colors.reset}`);
+  console.log(`${colors.dim}Stores Supabase credentials for this project so developers don't have to.${colors.reset}\n`);
+
+  const existing = config.readProjectConfig(repoRoot) || {};
+  const rl = createPrompt();
+
+  const urlSuffix = existing.supabaseUrl ? ` ${colors.dim}[${existing.supabaseUrl}]${colors.reset}` : '';
+  const supabaseUrl = await ask(rl, `${colors.cyan}Supabase project URL${colors.reset}${urlSuffix}: `);
+
+  const keySuffix = existing.supabaseAnonKey ? ` ${colors.dim}[unchanged]${colors.reset}` : '';
+  const supabaseAnonKey = await ask(rl, `${colors.cyan}Supabase anon key${colors.reset}${keySuffix}: `);
+
+  rl.close();
+
+  const newProjectConfig = {
+    supabaseUrl: supabaseUrl || existing.supabaseUrl || '',
+    supabaseAnonKey: supabaseAnonKey || existing.supabaseAnonKey || '',
+  };
+
+  const dest = config.writeProjectConfig(newProjectConfig, repoRoot);
+  console.log(`\n${colors.green}✓${colors.reset} Saved project config to ${colors.dim}${dest}${colors.reset}`);
+
+  if (newProjectConfig.supabaseUrl) {
+    process.stdout.write(`${colors.dim}Checking Supabase connectivity...${colors.reset} `);
+    const result = await sendToSupabase(newProjectConfig, {
+      participant_alias: 'trust-hook-configure-check',
+      commit_hash: 'project-config-check',
+      commit_message: 'trust-hook project configuration check',
+      repo_name: path.basename(repoRoot),
+      file_types: [],
+      used_ai: false,
+      task_type: null,
+      ai_tool: null,
+      trust_rating: null,
+      feedback_text: 'trust-hook configure connectivity check',
+      committed_at: new Date().toISOString(),
+    });
+    console.log(result.ok ? `${colors.green}OK${colors.reset}` : `${colors.yellow}could not confirm (${result.error || result.status || 'unknown error'})${colors.reset}`);
+  }
+
+  console.log(`\n${colors.bold}${colors.green}Project configured.${colors.reset} Commit ${colors.dim}${config.PROJECT_CONFIG_FILENAME}${colors.reset} so every developer picks it up automatically:`);
+  console.log(`${colors.dim}  git add ${config.PROJECT_CONFIG_FILENAME} && git commit -m "Configure trust-hook"${colors.reset}`);
+  console.log(`\nDevelopers can now install the hook with a single command from the repo root:`);
+  console.log(`${colors.cyan}  npx ./trust-hook${colors.reset}`);
+}
+
+// Developer-facing, single step: install the hook. Credentials come from the
+// project config committed by the project owner — nothing to type here
+// beyond (optionally, once) a participant alias.
 async function init() {
   const gitDir = findGitDir();
   if (!gitDir) {
@@ -36,55 +114,25 @@ async function init() {
   console.log(`${colors.bold}${colors.cyan}trust-hook setup${colors.reset}`);
   console.log(`${colors.dim}Installs a post-commit hook that asks a few quick questions about AI-assisted coding.${colors.reset}\n`);
 
-  const existing = config.readConfig() || {};
-  const rl = createPrompt();
-
-  const aliasSuffix = existing.participantAlias ? ` ${colors.dim}[${existing.participantAlias}]${colors.reset}` : '';
-  const alias = await ask(rl, `${colors.cyan}Participant alias${colors.reset} ${colors.dim}(any string, used to identify you anonymously)${colors.reset}${aliasSuffix}: `);
-
-  const urlSuffix = existing.supabaseUrl ? ` ${colors.dim}[${existing.supabaseUrl}]${colors.reset}` : '';
-  const supabaseUrl = await ask(rl, `${colors.cyan}Supabase project URL${colors.reset} ${colors.dim}(leave blank for dry-run mode)${colors.reset}${urlSuffix}: `);
-
-  let supabaseAnonKey = '';
-  if (supabaseUrl || existing.supabaseUrl) {
-    const keySuffix = existing.supabaseAnonKey ? ` ${colors.dim}[unchanged]${colors.reset}` : '';
-    supabaseAnonKey = await ask(rl, `${colors.cyan}Supabase anon key${colors.reset}${keySuffix}: `);
+  let personal = config.readConfig();
+  if (!personal || !personal.participantAlias) {
+    const rl = createPrompt();
+    const suggested = defaultAlias();
+    const suffix = suggested ? ` ${colors.dim}[${suggested}]${colors.reset}` : '';
+    const alias = await ask(rl, `${colors.cyan}Participant alias${colors.reset} ${colors.dim}(any string, used to identify you anonymously — press Enter to accept the default)${colors.reset}${suffix}: `);
+    rl.close();
+    personal = { participantAlias: alias || suggested };
+    config.writeConfig(personal);
+    console.log(`${colors.green}✓${colors.reset} Saved your alias to ${colors.dim}${config.CONFIG_PATH}${colors.reset} (reused for every repo you instrument)`);
+  } else {
+    console.log(`${colors.dim}Using saved participant alias "${personal.participantAlias}" (from ${config.CONFIG_PATH}).${colors.reset}`);
   }
 
-  rl.close();
-
-  const newConfig = {
-    participantAlias: alias || existing.participantAlias || '',
-    supabaseUrl: supabaseUrl || existing.supabaseUrl || '',
-    supabaseAnonKey: supabaseAnonKey || existing.supabaseAnonKey || '',
-  };
-
-  config.writeConfig(newConfig);
-  console.log(`\n${colors.green}✓${colors.reset} Saved config to ${colors.dim}${config.CONFIG_PATH}${colors.reset}`);
-
-  if (newConfig.supabaseUrl) {
-    process.stdout.write(`${colors.dim}Checking Supabase connectivity...${colors.reset} `);
-    const result = await sendToSupabase(newConfig, {
-      participant_alias: newConfig.participantAlias,
-      commit_hash: 'install-check',
-      commit_message: 'trust-hook installation check',
-      repo_name: path.basename(process.cwd()),
-      file_types: [],
-      used_ai: false,
-      task_type: null,
-      ai_tool: null,
-      trust_rating: null,
-      feedback_text: 'trust-hook init connectivity check',
-      committed_at: new Date().toISOString(),
-    });
-    if (result.ok) {
-      console.log(`${colors.green}OK${colors.reset}`);
-    } else {
-      console.log(`${colors.yellow}could not confirm (${result.error || result.status || 'unknown error'})${colors.reset}`);
-      console.log(`${colors.dim}That's fine — commits will be queued locally and retried automatically until it's reachable.${colors.reset}`);
-    }
+  const projectConfig = config.readProjectConfig();
+  if (projectConfig && projectConfig.supabaseUrl) {
+    console.log(`${colors.green}✓${colors.reset} Found project Supabase config at ${colors.dim}${config.PROJECT_CONFIG_FILENAME}${colors.reset} — nothing else to set up.`);
   } else {
-    console.log(`${colors.yellow}No Supabase URL set — the hook will run in dry-run mode (prints the payload instead of sending it).${colors.reset}`);
+    console.log(`${colors.yellow}No ${config.PROJECT_CONFIG_FILENAME} found in this repo yet — the hook will run in dry-run mode (prints the payload instead of sending it) until the project maintainer runs ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.yellow}.${colors.reset}`);
   }
 
   const hooksDir = path.join(gitDir, 'hooks');
@@ -142,19 +190,23 @@ function uninstall() {
 function printHelp() {
   console.log(`${colors.bold}trust-hook${colors.reset} — developer trust measurement tool\n`);
   console.log('Usage:');
-  console.log('  npx trust-hook init        Install the post-commit survey hook in this repo');
-  console.log('  npx trust-hook uninstall   Remove the hook from this repo');
+  console.log('  npx ./trust-hook              Install the post-commit survey hook in this repo (default)');
+  console.log('  npx ./trust-hook init         Same as above');
+  console.log('  npx ./trust-hook configure    Project owner: store Supabase credentials for the whole team');
+  console.log('  npx ./trust-hook uninstall    Remove the hook from this repo');
 }
 
 async function main() {
   const command = process.argv[2];
-  if (command === 'init') {
+  if (!command || command === 'init') {
     await init();
+  } else if (command === 'configure') {
+    await configureProject();
   } else if (command === 'uninstall') {
     uninstall();
   } else {
     printHelp();
-    if (command && command !== '--help' && command !== '-h') {
+    if (command !== '--help' && command !== '-h') {
       process.exitCode = 1;
     }
   }

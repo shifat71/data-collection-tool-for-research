@@ -4,11 +4,11 @@ const https = require('https');
 const { URL } = require('url');
 
 /**
- * Sends a survey payload to the Supabase REST API.
+ * Sends a payload to a Supabase REST API table (default: trust_events).
  * Resolves with { ok, dryRun?, status?, error? } - never rejects, so callers
  * never need a try/catch around a failed network call.
  */
-function sendToSupabase(config, payload) {
+function sendToSupabase(config, payload, table = 'trust_events') {
   return new Promise((resolve) => {
     if (!config || !config.supabaseUrl) {
       resolve({ ok: false, dryRun: true });
@@ -17,7 +17,7 @@ function sendToSupabase(config, payload) {
 
     let url;
     try {
-      url = new URL(config.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/trust_events');
+      url = new URL(config.supabaseUrl.replace(/\/+$/, '') + `/rest/v1/${table}`);
     } catch (e) {
       resolve({ ok: false, error: 'invalid_supabase_url' });
       return;

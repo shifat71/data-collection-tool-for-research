@@ -23,7 +23,9 @@ npx ./trust-hook
 
 That's the whole install. No `npm install`, nothing else downloaded — it runs directly out of the folder already in your clone.
 
-The only thing it may ask is a **participant alias** — any string you choose to identify your own commits anonymously in the dataset. It's asked once, ever, on your machine: saved to `~/.trust-hook/config.json` and reused automatically the next time you install the hook in a different project.
+The first time, it asks for a **participant alias** — any string you choose to identify your own commits in the dataset — plus a few optional details (full name, email, team/role, company) that just help your maintainer recognize you when approving your registration; press Enter to skip any of them. All of this is asked once, ever, on your machine: saved to `~/.trust-hook/config.json` and reused automatically the next time you install the hook in a different project.
+
+This also registers you with the project's Supabase database. **A maintainer has to manually approve you before your survey answers actually land in the dataset** — until then, everything still runs exactly the same on your end, your answers just queue locally and start counting automatically the moment you're approved. No message, no blocking, nothing to redo.
 
 If the project isn't connected to Supabase yet, the install still finishes and installs the hook — it just runs in **dry-run mode** (prints what it would send instead of sending it) until someone connects it. That's not something you need to fix yourself; ping your project maintainer.
 
@@ -62,7 +64,7 @@ Handy for rapid-fire WIP commits you don't want to interrupt.
 
 ## What data leaves your machine
 
-Only what you see in the prompts, plus a few things pulled automatically from git for that one commit: the short commit hash, commit message, changed file extensions, a timestamp, and the repo name. No file contents, no diffs, nothing beyond that. See [Data collection](./README.md#data-collection) in the main README for the exact schema if you want the full picture.
+Once, at install: your alias plus whichever optional details you chose to fill in (full name, email, team, company) — this goes to the `participants` table only, purely so your maintainer can identify you when approving. Every commit after that: only what you see in the survey prompts, plus a few things pulled automatically from git for that one commit — the short commit hash, commit message, changed file extensions, a timestamp, and the repo name. No file contents, no diffs, nothing beyond that. See [Data collection](./README.md#data-collection) in the main README for the exact schema if you want the full picture.
 
 ## Uninstall
 
@@ -79,4 +81,5 @@ Removes the hook from this repo. If it replaced a pre-existing `post-commit` hoo
 | Nothing happens after a commit | Check `.git/hooks/post-commit` exists and mentions `trust-hook`, and that `node` is on your `PATH`. Both are required for the hook to run at all. |
 | The JSON payload gets printed to your terminal instead of sent | Dry-run mode — the project isn't connected to Supabase yet. Nothing wrong on your end. |
 | "Could not reach Supabase" message | Queued locally, retried automatically on your next commit. No action needed. |
+| Submissions never seem to land, even though nothing looks wrong | You probably haven't been approved by your maintainer yet — ask them to check the `participants` table. Your answers are queued locally and will start counting the moment you're approved; nothing to redo. |
 | Want out entirely | `npx ./trust-hook uninstall` |

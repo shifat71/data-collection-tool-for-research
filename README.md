@@ -2,7 +2,7 @@
 
 A lightweight developer trust measurement tool. It installs a git `post-commit` hook that asks a short survey about whether, and how, AI assistance was used for each commit, then records the answers to a Supabase project for research analysis.
 
-Zero dependencies, one command to install, credentials configured once per project — not once per developer.
+Zero dependencies, one command to install. Supabase credentials are never committed to the repo — they're shared with the team privately and entered locally by each developer (see [Privacy and security](#privacy-and-security) for why).
 
 ---
 
@@ -30,11 +30,11 @@ Zero dependencies, one command to install, credentials configured once per proje
 |---|---|
 | `bin/cli.js` | Installer CLI — connects a project to Supabase and copies the hook into `.git/hooks/post-commit`. |
 | `src/hook-script.sh` | The hook itself. Fully self-contained (shell + inline Node.js), so copying this one file is all install needs to do. |
-| `trust-hook.config.json` | **Project-level** config — Supabase URL and anon key. Committed to the repo, shared by the whole team. |
-| `~/.trust-hook/config.json` | **Personal** config — just a participant alias, stored per developer, reused across every repo they instrument. |
-| Supabase | Stores submitted survey rows in the `trust_events` table (see [Data collection](#data-collection)). |
+| `trust-hook.config.json` | **Project-level** config — Supabase URL and anon key. **Git-ignored, never committed** — this repo is public, so credentials are shared with the team privately and each developer creates this file locally. |
+| `~/.trust-hook/config.json` | **Personal** config — a participant profile (alias plus optional name/email/team/company) and registration status, stored per developer, reused across every repo they instrument. |
+| Supabase | Stores registrations in `participants` and survey rows in `trust_events` (see [Data collection](#data-collection)). |
 
-On every `git commit`, the hook auto-captures commit metadata from git, asks two to five short questions in the terminal, and posts the result to Supabase. Credentials are re-read from `trust-hook.config.json` fresh on each commit — rotating a key only requires a `git pull`, never a hook reinstall.
+The first time a developer installs the hook, it registers them in the `participants` table — the project maintainer approves new registrations manually from the Supabase dashboard. From then on, on every `git commit`, the hook auto-captures commit metadata from git, asks two to five short questions in the terminal, and posts the result to Supabase, accepted only for approved participants (see [Privacy and security](#privacy-and-security)). Credentials are re-read from `trust-hook.config.json` fresh on each commit — rotating a key just needs each developer to re-run `npx ./trust-hook configure` with the new value, never a hook reinstall.
 
 ## Requirements
 
@@ -70,12 +70,15 @@ git add trust-hook && git commit -m "Add trust-hook"
 
 Either way, that's the only file-transfer step, ever — everything after this is a single command.
 
+Because everything lives nested inside `trust-hook/`, it can't collide with your project's own `bin/`, `src/`, `package.json`, etc. at the root — the two coexist fine. **This `trust-hook/` folder itself is meant to be committed** (unlike `trust-hook.config.json` inside it, which never is — see below); committing it is exactly how the rest of your team gets the tool with a single `git pull`, no separate distribution step. Just trying it out solo before deciding whether to adopt it for the team? Add `trust-hook/` to your project's `.gitignore` for now, and remove that line once you're ready to commit it for everyone.
+
 ### 2. Create a Supabase project and table
 
 1. At [supabase.com](https://supabase.com), create a new project. Once it's provisioned, open **Settings → API** and note the **Project URL** and **anon / public key**.
-2. Open **SQL Editor** in the dashboard, paste in [`supabase/schema.sql`](./supabase/schema.sql), and run it. This creates the `trust_events` table with a Row Level Security policy that restricts the anon key to `INSERT` only — it can never read, update, or delete rows. That's what makes it safe to commit that key to the repo.
+2. Open **SQL Editor** in the dashboard, paste in [`supabase/schema.sql`](./supabase/schema.sql), and run it. This creates the `participants` table (registrations, gated by your manual approval) and the `trust_events` table (survey rows, gated by an approved `participants` match) — both with a Row Level Security policy that restricts the anon key to `INSERT` only.
+3. **Keep the URL and key private — do not commit them anywhere in this public repo.** Insert-only still means *anyone holding the key* can submit rows; RLS stops them from reading, editing, or deleting data, but not from spamming fake entries into your dataset — the approval gate on `trust_events` is what actually stops that. Share the two values with your team through a private channel instead (Slack DM, password manager, etc.) — see [Privacy and security](#privacy-and-security).
 
-### 3. Install and connect
+### 3. Install, connect, and approve your team
 
 From wherever the tool's files live — the repo root if you're here directly, or the `trust-hook/` subfolder if you copied it into another project:
 
@@ -84,13 +87,9 @@ npx .          # from inside the tool's own folder
 npx ./trust-hook   # equivalently, from one level up (e.g. your project root)
 ```
 
-The first person to run this in a repo is offered the chance to connect Supabase inline (paste in the URL and anon key from step 2). It saves them to `trust-hook.config.json` and installs the hook in the same step. Commit the file so the rest of the team picks it up automatically:
+The first person to run this in a repo is offered the chance to enter the Supabase URL and anon key from step 2 inline. It saves them to `trust-hook.config.json` and installs the hook in the same step. This file is **git-ignored** — it stays on your machine only. Every other developer runs the exact same command and, when asked, pastes in the same URL/key you shared with them privately.
 
-```sh
-git add trust-hook.config.json && git commit -m "Configure trust-hook"
-```
-
-Everyone after that just runs the same command too — see below.
+Every developer's install also registers them in `participants` (see [Setup, step 2](#setup--connecting-a-project)). As the maintainer, open the **Table Editor → participants** in Supabase, find each teammate's row by username, and flip `approved` to `true` once you recognize them. Until then, their commits still trigger the survey locally and queue the results — nothing is lost, it just doesn't reach `trust_events` until you approve them.
 
 ## Using it as a developer
 
@@ -103,7 +102,7 @@ npx degit shifat71/data-collection-tool-for-research trust-hook
 
 (See [Setup, step 1](#setup--connecting-a-project) for a `git clone`-based alternative if you'd rather not run a third-party package.)
 
-Already there (most common — someone on your team added it)? Once a project is connected (or even before — it just runs in dry-run mode until then), every developer's install is the same single command, run once from wherever the tool's files live in their clone:
+Already there (most common — someone on your team added it)? Every developer's install is the same single command, run once from wherever the tool's files live in their clone:
 
 ```sh
 npx ./trust-hook
@@ -111,7 +110,9 @@ npx ./trust-hook
 
 (If the tool sits at the root of the repo you're in — as it does in this repository itself — that's `npx .` instead.)
 
-The only thing it might ask is a participant alias, and only the first time on your machine — it defaults to your `git config user.name`, so pressing Enter is enough.
+It'll ask for a participant alias the first time only — it defaults to your `git config user.name`, so pressing Enter is enough — plus a few optional details (full name, email, team/role, company) that just help your maintainer recognize you; press Enter to skip any of them. If nobody on your machine has set up Supabase for this repo yet, it'll also ask for the Project URL and anon key; **ask your project maintainer for these two values privately** (Slack, email, etc.) — they're never committed to the repo, so `git pull` alone won't get them to you. Once entered, that's a one-time step per machine.
+
+This also registers you with the project. Your maintainer approves new registrations manually in Supabase — until they do, your survey answers still get asked and saved locally exactly like an offline commit, and start counting automatically the moment you're approved. No message, no blocking, nothing to redo.
 
 From then on, every `git commit` triggers a short survey:
 
@@ -142,7 +143,25 @@ The full walkthrough of this section, without the setup material above, is in th
 
 ## Data collection
 
-Each survey response is sent as one JSON row to Supabase. Example payload:
+### Registration (once per developer, per machine)
+
+On first install, the CLI sends one row to the `participants` table:
+
+```json
+{
+  "username": "carol",
+  "full_name": "Carol Danvers",
+  "email": "carol@example.com",
+  "team": "backend",
+  "company": "Acme Corp"
+}
+```
+
+`username` is always present (it's the same alias used as `participant_alias` below); `full_name`, `email`, `team`, and `company` are each optional and `null` if skipped. This row exists purely so the project maintainer can recognize and approve the developer — see [Setup, step 3](#setup--connecting-a-project) and [Privacy and security](#privacy-and-security).
+
+### Survey submissions (every commit)
+
+Each survey response is sent as one JSON row to the `trust_events` table. Example payload:
 
 ```json
 {
@@ -180,18 +199,21 @@ Each survey response is sent as one JSON row to Supabase. Example payload:
 
 A "no" answer to the first question is still recorded — as a no-AI control data point, with the survey fields set to `null` — so the dataset captures both AI-assisted and non-AI-assisted commits.
 
-If a send fails (offline, Supabase unreachable), the payload is queued locally in `~/.trust-hook/queue.json` and silently retried on the next commit. No submission is ever lost or blocks the developer's workflow. With no Supabase connection configured at all, the hook runs in **dry-run mode** and prints the payload to stdout instead.
+If a send fails — offline, Supabase unreachable, or the participant isn't approved yet — the payload is queued locally in `~/.trust-hook/queue.json` and silently retried on the next commit. No submission is ever lost or blocks the developer's workflow. With no Supabase connection configured at all, the hook runs in **dry-run mode** and prints the payload to stdout instead. A failed registration retries the same way, silently, on the next commit.
 
 ## Privacy and security
 
-- The Supabase **anon key** is designed to be public (the same key a client-side web app would ship) and is safe to commit — access is enforced entirely by the Row Level Security policy in `supabase/schema.sql`, which permits inserts only. Nothing submitted through the hook can be read, edited, or deleted using that key.
-- `participant_alias` is self-chosen by each developer, not derived from any account or credential — it exists to distinguish participants in the dataset, not to identify them externally.
+- **`trust-hook.config.json` (the Supabase URL and anon key) is never committed — it's `.gitignore`'d.** The Row Level Security policies in `supabase/schema.sql` restrict the anon key to `INSERT` only, so it can't read, edit, or delete existing data on either table — but insert-only alone would still let anyone holding the key submit fabricated rows. That's a real risk for a public repo specifically, since research data integrity depends on only trusted contributors being able to write to it. Treat the anon key as a team secret: share it privately (Slack DM, password manager, etc.), never in a commit, issue, PR, or anywhere else visible on GitHub.
+- **The approval gate closes that gap for actual survey data.** `trust_events` only accepts a row when its `participant_alias` matches a `participants` row the maintainer has manually set `approved = true` on — enforced by Postgres itself, not by the hook. Anyone with the key can still *register* (harmless — it's just a name in a list awaiting review) but can't get real submissions into the dataset without a human approving them first. `participants` itself has no read/update/delete policy for the anon key either, so registrants can't see or approve each other.
+- If the key is ever exposed anyway, rotate it from the Supabase dashboard (**Settings → API**) and re-share the new one the same way — each developer then re-runs `npx ./trust-hook configure` with the new value.
+- `participant_alias` (== `username` at registration) is self-chosen by each developer, not derived from any account or credential — the optional full name/email/team/company collected at registration exist solely to help the maintainer identify who to approve, live only in `participants` (never in `trust_events`), and are never readable through the anon key — only the project owner, via the Supabase dashboard or a service-role key, can see them.
 - The hook never transmits file contents, diffs, or anything beyond what's listed in [Data collection](#data-collection).
 
 ## Project structure
 
 ```
 trust-hook/
+├── .gitignore                        Ignores trust-hook.config.json (see Privacy and security)
 ├── README.md                        This file — main documentation
 ├── DEVELOPER_GUIDE.md                Standalone guide for developers using the tool
 ├── package.json
@@ -201,17 +223,19 @@ trust-hook/
 │   ├── hook-script.sh                The post-commit hook (self-contained shell + inline Node.js)
 │   ├── config.js                     Reads/writes personal and project config
 │   ├── prompt.js                     Terminal prompt helpers
-│   └── sender.js                     Posts survey payloads to Supabase
+│   └── sender.js                     Posts payloads to any Supabase table
 ├── supabase/
-│   └── schema.sql                    Creates the trust_events table + RLS policy
-└── trust-hook.config.example.json    Example project config shape
+│   └── schema.sql                    Creates participants + trust_events and their RLS policies
+└── trust-hook.config.example.json    Example project config shape — not the real one
 ```
+
+`trust-hook.config.json` itself — the real one, holding actual credentials — is created locally by each developer and is not part of this tree; it's git-ignored.
 
 When copied into another project, this whole tree typically lives inside a `trust-hook/` subfolder of that project (see [Setup](#setup--connecting-a-project)) — the layout above is identical either way, just nested one level deeper.
 
 ## Troubleshooting
 
 - **Nothing happens after a commit.** Confirm the hook is installed (`.git/hooks/post-commit` should mention `trust-hook`) and that Node.js is on your `PATH`. If either is missing, the hook exits silently by design rather than breaking your commit.
-- **Payload printed to the terminal instead of being sent.** That's dry-run mode — no `trust-hook.config.json` (or no Supabase URL in it) was found. Run `npx ./trust-hook configure` to connect it.
-- **"Could not reach Supabase."** The payload was queued locally and will be retried automatically on your next commit — no action needed.
+- **Payload printed to the terminal instead of being sent.** That's dry-run mode — no local `trust-hook.config.json` (or no Supabase URL in it) was found on your machine. Run `npx ./trust-hook configure` with the URL/key your project maintainer shared with you.
+- **"Could not reach Supabase" / submissions never seem to land.** Two possibilities, both self-healing: a real connectivity issue (queued and retried automatically), or the developer just hasn't been approved in `participants` yet — the maintainer needs to flip `approved` to `true` for that username in the Supabase Table Editor. Either way, nothing is lost; it starts flowing the moment the cause is fixed.
 - **Want to stop being surveyed on a repo?** `npx ./trust-hook uninstall`.

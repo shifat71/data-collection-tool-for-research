@@ -65,13 +65,23 @@ const AI_TOOLS = [
   ['Other', 'other'],
 ];
 
-// Personal config: just the developer's alias, set once via `init` and
-// shared across every repo they instrument.
+// Personal config: the developer's profile (alias, optional name/email/
+// team/company, registration status), set once via `init` and shared
+// across every repo they instrument.
 function readPersonalConfig() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   } catch (e) {
     return null;
+  }
+}
+
+function writePersonalConfig(personal) {
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(personal, null, 2));
+  } catch (e) {
+    // Never let config persistence problems break the developer's workflow.
   }
 }
 
@@ -125,7 +135,8 @@ function collectAutoData() {
   };
 }
 
-function sendToSupabase(config, payload) {
+function sendToSupabase(config, payload, table) {
+  table = table || 'trust_events';
   return new Promise((resolve) => {
     if (!config || !config.supabaseUrl) {
       resolve({ ok: false, dryRun: true });
@@ -133,7 +144,7 @@ function sendToSupabase(config, payload) {
     }
     let url;
     try {
-      url = new URL(config.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/trust_events');
+      url = new URL(config.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/' + table);
     } catch (e) {
       resolve({ ok: false, error: 'invalid_supabase_url' });
       return;
@@ -211,6 +222,28 @@ async function flushQueue(config) {
   writeQueue(remaining);
 }
 
+// Best-effort, silent retry of a registration that couldn't reach Supabase
+// during `init` (project not connected yet, offline, etc). Registration
+// itself isn't approval-gated, so once it succeeds it stays succeeded -
+// no need to retry again on later commits.
+async function retryRegistration(config, personal) {
+  const result = await sendToSupabase(
+    config,
+    {
+      username: personal.participantAlias,
+      full_name: personal.fullName || null,
+      email: personal.email || null,
+      team: personal.team || null,
+      company: personal.company || null,
+    },
+    'participants'
+  );
+  if (result.ok) {
+    personal.registered = true;
+    writePersonalConfig(personal);
+  }
+}
+
 async function deliver(config, payload) {
   const result = await sendToSupabase(config, payload);
   if (result.dryRun) {
@@ -281,8 +314,12 @@ async function main() {
     supabaseAnonKey: project ? project.supabaseAnonKey : '',
   };
 
-  // Best-effort: clear out anything queued from a previous commit.
+  // Best-effort: clear out anything queued from a previous commit, and
+  // silently retry a registration that couldn't go through during install.
   await flushQueue(config);
+  if (!personal.registered && config.supabaseUrl) {
+    await retryRegistration(config, personal);
+  }
 
   // Git runs post-commit hooks with stdin connected to /dev/null, so
   // process.stdin can't be used for prompts — open the controlling

@@ -85,8 +85,7 @@ async function promptAndWriteProjectConfig(repoRoot, existing) {
     console.log(result.ok ? `${colors.green}OK${colors.reset}` : `${colors.yellow}could not confirm (${result.error || result.status || 'unknown error'})${colors.reset}`);
   }
 
-  console.log(`${colors.dim}Commit ${config.PROJECT_CONFIG_FILENAME} so every teammate picks it up automatically:${colors.reset}`);
-  console.log(`${colors.dim}  git add ${config.PROJECT_CONFIG_FILENAME} && git commit -m "Configure trust-hook"${colors.reset}`);
+  console.log(`${colors.yellow}Do not commit ${config.PROJECT_CONFIG_FILENAME}${colors.reset}${colors.dim} — it's git-ignored on purpose. Share the URL and anon key above with your team through a private channel (Slack DM, password manager, etc.); each teammate then runs ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.dim} with the same two values.${colors.reset}`);
 
   return newProjectConfig;
 }
@@ -101,15 +100,44 @@ async function configureProject() {
   }
 
   console.log(`${colors.bold}${colors.cyan}trust-hook project setup${colors.reset}`);
-  console.log(`${colors.dim}Stores Supabase credentials for this project so developers don't have to.${colors.reset}\n`);
+  console.log(`${colors.dim}Stores Supabase credentials locally (not committed — this repo may be public).${colors.reset}\n`);
 
   const existing = config.readProjectConfig(repoRoot) || {};
   await promptAndWriteProjectConfig(repoRoot, existing);
 }
 
-// Developer-facing, single step: install the hook. Credentials come from the
-// project config committed by the project owner — nothing to type here
-// beyond (optionally, once) a participant alias.
+// Registers (or re-attempts registering) this developer in the project's
+// Supabase `participants` table. A maintainer approves new registrations
+// manually in the dashboard (see supabase/schema.sql) - until then,
+// trust_events inserts for this participant are rejected by Postgres, and
+// the hook queues them locally and retries automatically. Registration
+// itself has no such gate, so it only fails on real connectivity/config
+// problems - never blocks, never throws.
+async function registerParticipant(projectConfig, personal) {
+  if (!projectConfig || !projectConfig.supabaseUrl) return false;
+  const result = await sendToSupabase(
+    projectConfig,
+    {
+      username: personal.participantAlias,
+      full_name: personal.fullName || null,
+      email: personal.email || null,
+      team: personal.team || null,
+      company: personal.company || null,
+    },
+    'participants'
+  );
+  if (result.ok) {
+    console.log(`${colors.green}✓${colors.reset} Registered with the project — a maintainer will approve you in Supabase before your submissions count.`);
+  } else {
+    console.log(`${colors.yellow}Could not register yet (${result.error || result.status || 'unknown error'}) — will retry automatically on your next commit.${colors.reset}`);
+  }
+  return result.ok;
+}
+
+// Developer-facing, single step: install the hook. Project credentials
+// live in a git-ignored local file (not committed — see promptAndWrite-
+// ProjectConfig) - a developer either enters values shared with them
+// privately by the project maintainer, or is the one setting it up.
 async function init() {
   const gitDir = findGitDir();
   if (!gitDir) {
@@ -120,37 +148,61 @@ async function init() {
   console.log(`${colors.bold}${colors.cyan}trust-hook setup${colors.reset}`);
   console.log(`${colors.dim}Installs a post-commit hook that asks a few quick questions about AI-assisted coding.${colors.reset}\n`);
 
+  const repoRoot = config.findProjectRoot();
+  let projectConfig = config.readProjectConfig(repoRoot);
+  if (projectConfig && projectConfig.supabaseUrl) {
+    console.log(`${colors.green}✓${colors.reset} Found project Supabase config at ${colors.dim}${config.PROJECT_CONFIG_FILENAME}${colors.reset} — nothing else to set up.`);
+  } else {
+    // This file is git-ignored (the repo may be public), so it's never
+    // picked up via git pull — every developer sets it up locally, once,
+    // either creating the Supabase project themselves or pasting in the
+    // URL/key their project maintainer shared with them privately.
+    console.log(`${colors.yellow}No local ${config.PROJECT_CONFIG_FILENAME} found for this repo.${colors.reset}`);
+    const rl = createPrompt();
+    const wantsSetup = await askYesNo(rl, `${colors.cyan}Enter Supabase credentials now? (y/n)${colors.reset} ${colors.dim}(ask your project maintainer if you don't have them)${colors.reset} `);
+    rl.close();
+    if (wantsSetup) {
+      projectConfig = await promptAndWriteProjectConfig(repoRoot, projectConfig || {});
+    } else {
+      console.log(`${colors.dim}Skipping — the hook will run in dry-run mode (prints the payload instead of sending it) until you run ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.dim}.${colors.reset}`);
+    }
+  }
+
   let personal = config.readConfig();
   if (!personal || !personal.participantAlias) {
     const rl = createPrompt();
     const suggested = defaultAlias();
     const suffix = suggested ? ` ${colors.dim}[${suggested}]${colors.reset}` : '';
-    const alias = await ask(rl, `${colors.cyan}Participant alias${colors.reset} ${colors.dim}(any string, used to identify you anonymously — press Enter to accept the default)${colors.reset}${suffix}: `);
+    const alias = await ask(rl, `${colors.cyan}Participant alias / username${colors.reset} ${colors.dim}(identifies you in the dataset — press Enter to accept the default)${colors.reset}${suffix}: `);
+
+    console.log(`${colors.dim}A few optional details to help your maintainer recognize and approve you — press Enter to skip any.${colors.reset}`);
+    const fullName = await ask(rl, `${colors.cyan}Full name${colors.reset} ${colors.dim}(optional)${colors.reset}: `);
+    const email = await ask(rl, `${colors.cyan}Email${colors.reset} ${colors.dim}(optional)${colors.reset}: `);
+    const team = await ask(rl, `${colors.cyan}Team / role${colors.reset} ${colors.dim}(optional)${colors.reset}: `);
+    const company = await ask(rl, `${colors.cyan}Company${colors.reset} ${colors.dim}(optional)${colors.reset}: `);
     rl.close();
-    personal = { participantAlias: alias || suggested };
+
+    personal = {
+      participantAlias: alias || suggested,
+      fullName: fullName || null,
+      email: email || null,
+      team: team || null,
+      company: company || null,
+      registered: false,
+    };
     config.writeConfig(personal);
-    console.log(`${colors.green}✓${colors.reset} Saved your alias to ${colors.dim}${config.CONFIG_PATH}${colors.reset} (reused for every repo you instrument)`);
+    console.log(`${colors.green}✓${colors.reset} Saved your details to ${colors.dim}${config.CONFIG_PATH}${colors.reset} (reused for every repo you instrument)`);
+
+    personal.registered = await registerParticipant(projectConfig, personal);
+    config.writeConfig(personal);
+  } else if (!personal.registered) {
+    // Either a pre-existing install from before registration existed, or
+    // an earlier registration attempt that couldn't reach Supabase yet.
+    console.log(`${colors.dim}Using saved participant alias "${personal.participantAlias}" (from ${config.CONFIG_PATH}).${colors.reset}`);
+    personal.registered = await registerParticipant(projectConfig, personal);
+    config.writeConfig(personal);
   } else {
     console.log(`${colors.dim}Using saved participant alias "${personal.participantAlias}" (from ${config.CONFIG_PATH}).${colors.reset}`);
-  }
-
-  const repoRoot = config.findProjectRoot();
-  const existingProjectConfig = config.readProjectConfig(repoRoot);
-  if (existingProjectConfig && existingProjectConfig.supabaseUrl) {
-    console.log(`${colors.green}✓${colors.reset} Found project Supabase config at ${colors.dim}${config.PROJECT_CONFIG_FILENAME}${colors.reset} — nothing else to set up.`);
-  } else {
-    // Nobody has connected this repo to Supabase yet — whoever runs the
-    // installer first (usually the project owner) gets offered the setup
-    // right here, so there's still only ever one command to run.
-    console.log(`${colors.yellow}No ${config.PROJECT_CONFIG_FILENAME} found in this repo yet.${colors.reset}`);
-    const rl = createPrompt();
-    const wantsSetup = await askYesNo(rl, `${colors.cyan}Connect this repo to a Supabase project now? (y/n)${colors.reset} `);
-    rl.close();
-    if (wantsSetup) {
-      await promptAndWriteProjectConfig(repoRoot, existingProjectConfig || {});
-    } else {
-      console.log(`${colors.dim}Skipping — the hook will run in dry-run mode (prints the payload instead of sending it) until someone runs ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.dim}.${colors.reset}`);
-    }
   }
 
   const hooksDir = path.join(gitDir, 'hooks');

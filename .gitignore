@@ -1,0 +1,4 @@
+# Project-level Supabase credentials. This repo is public — committing
+# this file would let anyone insert rows into the research database.
+# Distribute its contents to your team privately instead (see README).
+trust-hook.config.json

@@ -1,6 +1,6 @@
-# data-collection-tool-for-research
+# trust-hook
 
-**trust-hook** — a lightweight developer trust measurement tool. It installs a git `post-commit` hook that asks a short survey about whether, and how, AI assistance was used for each commit, then records the answers to a Supabase project for research analysis.
+A lightweight developer trust measurement tool. It installs a git `post-commit` hook that asks a short survey about whether, and how, AI assistance was used for each commit, then records the answers to a Supabase project for research analysis.
 
 Zero dependencies, one command to install, credentials configured once per project — not once per developer.
 
@@ -21,15 +21,15 @@ Zero dependencies, one command to install, credentials configured once per proje
 
 ## Who this is for
 
-- **Just told to install this on a project you're already working on?** Jump to [Using it as a developer](#using-it-as-a-developer), or read the standalone [Developer Guide](./trust-hook/DEVELOPER_GUIDE.md) — it's the same content, trimmed to only what a day-to-day user needs.
+- **Just told to install this on a project you're already working on?** Jump to [Using it as a developer](#using-it-as-a-developer), or read the standalone [Developer Guide](./DEVELOPER_GUIDE.md) — it's the same content, trimmed to only what a day-to-day user needs.
 - **Adding trust-hook to a project for the first time, or own the Supabase project behind it?** Read [Setup — connecting a project](#setup--connecting-a-project) below; everything else on this page is useful background too.
 
 ## How it works
 
 | Piece | Role |
 |---|---|
-| `trust-hook/bin/cli.js` | Installer CLI — connects a project to Supabase and copies the hook into `.git/hooks/post-commit`. |
-| `trust-hook/src/hook-script.sh` | The hook itself. Fully self-contained (shell + inline Node.js), so copying this one file is all install needs to do. |
+| `bin/cli.js` | Installer CLI — connects a project to Supabase and copies the hook into `.git/hooks/post-commit`. |
+| `src/hook-script.sh` | The hook itself. Fully self-contained (shell + inline Node.js), so copying this one file is all install needs to do. |
 | `trust-hook.config.json` | **Project-level** config — Supabase URL and anon key. Committed to the repo, shared by the whole team. |
 | `~/.trust-hook/config.json` | **Personal** config — just a participant alias, stored per developer, reused across every repo they instrument. |
 | Supabase | Stores submitted survey rows in the `trust_events` table (see [Data collection](#data-collection)). |
@@ -44,23 +44,26 @@ On every `git commit`, the hook auto-captures commit metadata from git, asks two
 
 ## Setup — connecting a project
 
-### 1. Get the tool
+### 1. Get the tool into your project
 
-Already working in this repository? `trust-hook/` is already at the root — skip to step 2.
+This repository *is* the tool — there's no separate package to install, just files to have present in a project.
 
-Bringing it into a *different* project — grab just the `trust-hook/` folder (no full repo, no `.git` history) using [degit](https://github.com/Rich-Harris/degit), run once via `npx`:
+**Working in this repository directly?** Everything's already at the root — skip to step 2.
+
+**Bringing it into a *different* project:** copy this repo's contents into a subfolder there (`trust-hook/` is the recommended name — the rest of these docs assume it). Grab just the files, no `.git` history, using [degit](https://github.com/Rich-Harris/degit) via `npx`:
 
 ```sh
 cd /path/to/your-project
-npx degit shifat71/data-collection-tool-for-research/trust-hook trust-hook
+npx degit shifat71/data-collection-tool-for-research trust-hook
 git add trust-hook && git commit -m "Add trust-hook"
 ```
 
-Would rather not run a third-party package to fetch it? A plain `git clone` works too — it pulls the whole repo locally, but there's nothing else in it to worry about:
+Would rather not run a third-party package to fetch it? A plain `git clone` works too:
 
 ```sh
-git clone https://github.com/shifat71/data-collection-tool-for-research.git
-cp -r data-collection-tool-for-research/trust-hook /path/to/your-project/
+git clone https://github.com/shifat71/data-collection-tool-for-research.git /tmp/trust-hook-src
+cp -r /tmp/trust-hook-src /path/to/your-project/trust-hook
+rm -rf /path/to/your-project/trust-hook/.git /tmp/trust-hook-src
 cd /path/to/your-project
 git add trust-hook && git commit -m "Add trust-hook"
 ```
@@ -70,14 +73,15 @@ Either way, that's the only file-transfer step, ever — everything after this i
 ### 2. Create a Supabase project and table
 
 1. At [supabase.com](https://supabase.com), create a new project. Once it's provisioned, open **Settings → API** and note the **Project URL** and **anon / public key**.
-2. Open **SQL Editor** in the dashboard, paste in [`trust-hook/supabase/schema.sql`](./trust-hook/supabase/schema.sql), and run it. This creates the `trust_events` table with a Row Level Security policy that restricts the anon key to `INSERT` only — it can never read, update, or delete rows. That's what makes it safe to commit that key to the repo.
+2. Open **SQL Editor** in the dashboard, paste in [`supabase/schema.sql`](./supabase/schema.sql), and run it. This creates the `trust_events` table with a Row Level Security policy that restricts the anon key to `INSERT` only — it can never read, update, or delete rows. That's what makes it safe to commit that key to the repo.
 
 ### 3. Install and connect
 
-From the repo root:
+From wherever the tool's files live — the repo root if you're here directly, or the `trust-hook/` subfolder if you copied it into another project:
 
 ```sh
-npx ./trust-hook
+npx .          # from inside the tool's own folder
+npx ./trust-hook   # equivalently, from one level up (e.g. your project root)
 ```
 
 The first person to run this in a repo is offered the chance to connect Supabase inline (paste in the URL and anon key from step 2). It saves them to `trust-hook.config.json` and installs the hook in the same step. Commit the file so the rest of the team picks it up automatically:
@@ -86,15 +90,17 @@ The first person to run this in a repo is offered the chance to connect Supabase
 git add trust-hook.config.json && git commit -m "Configure trust-hook"
 ```
 
-Everyone after that just runs `npx ./trust-hook` too — see below.
+Everyone after that just runs the same command too — see below.
 
 ## Using it as a developer
 
-Once a project is connected (or even before — it just runs in dry-run mode until then), every developer's install is the same single command, run once from the repo root:
+Once a project is connected (or even before — it just runs in dry-run mode until then), every developer's install is the same single command, run once from wherever the tool's files live in their clone:
 
 ```sh
 npx ./trust-hook
 ```
+
+(If the tool sits at the root of the repo you're in — as it does in this repository itself — that's `npx .` instead.)
 
 The only thing it might ask is a participant alias, and only the first time on your machine — it defaults to your `git config user.name`, so pressing Enter is enough.
 
@@ -114,13 +120,13 @@ git commit -m "wip: quick fix [no-survey]"
 
 The hook never blocks a commit: if there's no terminal to prompt on (CI, a GUI git client, an automated commit), or if you hit Ctrl+C mid-survey, it exits silently and the commit stands as-is.
 
-The full walkthrough of this section, without the setup material above, is in the standalone [Developer Guide](./trust-hook/DEVELOPER_GUIDE.md) — worth sharing directly with teammates who just need to install and go.
+The full walkthrough of this section, without the setup material above, is in the standalone [Developer Guide](./DEVELOPER_GUIDE.md) — worth sharing directly with teammates who just need to install and go.
 
 ## Command reference
 
 | Command | Effect |
 |---|---|
-| `npx ./trust-hook` | Install the hook. First run in a repo also offers to connect Supabase. |
+| `npx ./trust-hook` (or `npx .` from inside the tool's own folder) | Install the hook. First run in a repo also offers to connect Supabase. |
 | `npx ./trust-hook init` | Same as above (explicit form). |
 | `npx ./trust-hook configure` | Set or rotate this project's Supabase credentials without touching the hook install. |
 | `npx ./trust-hook uninstall` | Remove the hook from `.git/hooks/`. Restores any pre-existing `post-commit` hook that was backed up on install. |
@@ -169,30 +175,30 @@ If a send fails (offline, Supabase unreachable), the payload is queued locally i
 
 ## Privacy and security
 
-- The Supabase **anon key** is designed to be public (the same key a client-side web app would ship) and is safe to commit — access is enforced entirely by the Row Level Security policy in `trust-hook/supabase/schema.sql`, which permits inserts only. Nothing submitted through the hook can be read, edited, or deleted using that key.
+- The Supabase **anon key** is designed to be public (the same key a client-side web app would ship) and is safe to commit — access is enforced entirely by the Row Level Security policy in `supabase/schema.sql`, which permits inserts only. Nothing submitted through the hook can be read, edited, or deleted using that key.
 - `participant_alias` is self-chosen by each developer, not derived from any account or credential — it exists to distinguish participants in the dataset, not to identify them externally.
 - The hook never transmits file contents, diffs, or anything beyond what's listed in [Data collection](#data-collection).
 
 ## Project structure
 
 ```
-data-collection-tool-for-research/
-├── README.md                          This file — the project's main documentation
-└── trust-hook/
-    ├── DEVELOPER_GUIDE.md             Standalone guide for developers using the tool
-    ├── README.md                      Package-level readme (points back here)
-    ├── package.json
-    ├── bin/
-    │   └── cli.js                     CLI entry point (init / configure / uninstall)
-    ├── src/
-    │   ├── hook-script.sh             The post-commit hook (self-contained shell + inline Node.js)
-    │   ├── config.js                  Reads/writes personal and project config
-    │   ├── prompt.js                  Terminal prompt helpers
-    │   └── sender.js                  Posts survey payloads to Supabase
-    ├── supabase/
-    │   └── schema.sql                 Creates the trust_events table + RLS policy
-    └── trust-hook.config.example.json Example project config shape
+trust-hook/
+├── README.md                        This file — main documentation
+├── DEVELOPER_GUIDE.md                Standalone guide for developers using the tool
+├── package.json
+├── bin/
+│   └── cli.js                       CLI entry point (init / configure / uninstall)
+├── src/
+│   ├── hook-script.sh                The post-commit hook (self-contained shell + inline Node.js)
+│   ├── config.js                     Reads/writes personal and project config
+│   ├── prompt.js                     Terminal prompt helpers
+│   └── sender.js                     Posts survey payloads to Supabase
+├── supabase/
+│   └── schema.sql                    Creates the trust_events table + RLS policy
+└── trust-hook.config.example.json    Example project config shape
 ```
+
+When copied into another project, this whole tree typically lives inside a `trust-hook/` subfolder of that project (see [Setup](#setup--connecting-a-project)) — the layout above is identical either way, just nested one level deeper.
 
 ## Troubleshooting
 

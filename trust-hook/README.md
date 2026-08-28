@@ -6,13 +6,24 @@ Credentials are configured once at the **project level** and committed to the re
 
 ## Project owner: one-time setup
 
+### 1. Get a Supabase project
+
+- Go to [supabase.com](https://supabase.com), sign in, and click **New project** (the free tier is plenty for this). Pick an org, name, database password, and region, then wait ~2 minutes for it to provision.
+- In the project dashboard: **Settings → API** gives you the two values you need — the **Project URL** and the **anon / public key**. (Prefer local dev/testing instead of a hosted project? The [Supabase CLI](https://supabase.com/docs/guides/local-development) — `supabase init && supabase start` — runs the whole stack in Docker and prints the same two values for `http://localhost:...`.)
+
+### 2. Create the table
+
+Open **SQL Editor** in the dashboard, paste the contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. It creates the `trust_events` table the hook writes to, plus a Row Level Security policy that lets the public anon key *insert* rows but never read/update/delete them — that's what makes it safe to commit the anon key in the next step.
+
+### 3. Connect it to trust-hook
+
 Run this once, from the repo root, after the `trust-hook/` folder has been added to the project:
 
 ```sh
 npx ./trust-hook configure
 ```
 
-This asks for the Supabase project URL and anon key and saves them to `trust-hook.config.json` at the repo root. Commit that file so every developer gets it for free:
+Paste in the Project URL and anon key from step 1. It saves them to `trust-hook.config.json` at the repo root and runs a connectivity check. Commit the file so every developer gets it for free:
 
 ```sh
 git add trust-hook.config.json && git commit -m "Configure trust-hook"

@@ -44,9 +44,20 @@ On every `git commit`, the hook auto-captures commit metadata from git, asks two
 
 ## Setup — connecting a project
 
-### 1. The tool is already in this repo
+### 1. Get the tool
 
-`trust-hook/` lives at the root of this repository. If you're bringing trust-hook to a *different* project, copy the `trust-hook/` folder into that repo's root and commit it — that's the only file transfer step, ever.
+Already working in this repository? `trust-hook/` is already at the root — skip to step 2.
+
+Bringing it into a *different* project: clone this repo and copy the `trust-hook/` folder into that project's root.
+
+```sh
+git clone https://github.com/shifat71/data-collection-tool-for-research.git
+cp -r data-collection-tool-for-research/trust-hook /path/to/your-project/
+cd /path/to/your-project
+git add trust-hook && git commit -m "Add trust-hook"
+```
+
+That's the only file-transfer step, ever — everything after this is a single command.
 
 ### 2. Create a Supabase project and table
 

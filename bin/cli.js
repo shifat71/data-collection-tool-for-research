@@ -12,6 +12,7 @@ const { sendToSupabase } = require('../src/sender');
 
 const HOOK_TEMPLATE_PATH = path.join(__dirname, '..', 'src', 'hook-script.sh');
 const CONFIG_DIR_PLACEHOLDER = '__TRUST_HOOK_CONFIG_DIR__';
+const TOOL_DIR_PLACEHOLDER = '__TRUST_HOOK_TOOL_DIR__';
 const HOOK_MARKER = 'trust-hook post-commit hook';
 
 function findGitDir() {
@@ -63,7 +64,7 @@ async function promptAndWriteProjectConfig(repoRoot, existing) {
     supabaseAnonKey: supabaseAnonKey || existing.supabaseAnonKey || '',
   };
 
-  const dest = config.writeProjectConfig(newProjectConfig, repoRoot);
+  const dest = config.writeProjectConfig(newProjectConfig);
   console.log(`${colors.green}✓${colors.reset} Saved project config to ${colors.dim}${dest}${colors.reset}`);
 
   if (newProjectConfig.supabaseUrl) {
@@ -85,7 +86,7 @@ async function promptAndWriteProjectConfig(repoRoot, existing) {
   }
 
   console.log(`${colors.yellow}Do not commit ${config.PROJECT_CONFIG_FILENAME}${colors.reset}${colors.dim} — it's git-ignored on purpose.${colors.reset}`);
-  console.log(`${colors.dim}To set up each developer's machine, either run this same command there yourself, or share the URL and key privately so they can run it.${colors.reset}`);
+  console.log(`${colors.dim}Give each developer a copy of this folder (including the config file). They just drop it in and run ${colors.reset}${colors.cyan}npx ./trust-hook${colors.reset}${colors.dim}.${colors.reset}`);
 
   return newProjectConfig;
 }
@@ -212,6 +213,7 @@ async function init() {
 
   let hookScript = fs.readFileSync(HOOK_TEMPLATE_PATH, 'utf8');
   hookScript = hookScript.split(CONFIG_DIR_PLACEHOLDER).join(config.CONFIG_DIR);
+  hookScript = hookScript.split(TOOL_DIR_PLACEHOLDER).join(config.TOOL_ROOT);
   fs.writeFileSync(hookDest, hookScript);
   fs.chmodSync(hookDest, 0o755);
 

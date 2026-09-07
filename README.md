@@ -86,32 +86,23 @@ Run the configure command from wherever the tool's files live in your project:
 npx ./trust-hook configure
 ```
 
-Paste in the Project URL and anon key from step 2. It saves them to `trust-hook.config.json` — **git-ignored**, stays on this machine only — and runs a connectivity check.
+Paste in the Project URL and anon key from step 2. It saves them to `trust-hook.config.json` inside the tool's folder — **git-ignored**, never committed — and runs a connectivity check.
 
-**Do this before a developer's trial starts.** You have two options for getting each developer connected:
-- **Option A (recommended):** run `configure` yourself on each developer's machine before they install.
-- **Option B:** share the URL and anon key privately (Slack DM, password manager, etc.) and have each developer run `npx ./trust-hook configure` themselves.
+### 4. Distribute the folder to developers
 
-Either way, by the time someone runs the install command, Supabase should already be connected — the developer's install is then a single command with zero Supabase prompts.
+Once configured, give each developer a copy of the entire `trust-hook/` folder — including the `trust-hook.config.json` that `configure` just created. The developer drops it into their project and runs one command; they never touch Supabase credentials.
 
-### 4. Approve participants
+How you distribute the folder is up to you — zip it and share via Slack, a shared drive, USB, etc. The config file is inside the folder, so it travels with it automatically.
+
+### 5. Approve participants
 
 As developers install (see [Developer setup](#developer-setup)), each one registers themselves in `participants`. Open **Table Editor → participants** in Supabase, find each teammate's row by username, and flip `approved` to `true` once you recognize them — their submissions start counting the moment you do.
 
 ## Developer setup
 
-**You don't need to configure Supabase — your maintainer has already done that.** All you need to do is install the hook and start working.
+**You don't need to configure Supabase — your maintainer has already done that.** All you need to do is drop the folder in and install the hook.
 
-Don't have the `trust-hook/` folder in your project yet? Grab it into your project root:
-
-```sh
-cd /path/to/your-project
-npx degit shifat71/data-collection-tool-for-research trust-hook
-```
-
-(See [Maintainer setup, step 1](#maintainer-setup) for a `git clone`-based alternative if you'd rather not run a third-party package.)
-
-Then install the hook — one command, run once:
+Your maintainer will give you a pre-configured `trust-hook/` folder. Place it in your project root, then install — one command, run once:
 
 ```sh
 npx ./trust-hook
@@ -243,6 +234,6 @@ When copied into another project, this whole tree typically lives inside a `trus
 ## Troubleshooting
 
 - **Nothing happens after a commit.** Confirm the hook is installed (`.git/hooks/post-commit` should mention `trust-hook`) and that Node.js is on your `PATH`. If either is missing, the hook exits silently by design rather than breaking your commit.
-- **Payload printed to the terminal instead of being sent.** That's dry-run mode — no local `trust-hook.config.json` (or no Supabase URL in it) was found on your machine. Ask your maintainer to run `npx ./trust-hook configure` for you, or ask them for the URL and anon key so you can run it yourself.
+- **Payload printed to the terminal instead of being sent.** That's dry-run mode — the `trust-hook.config.json` file is missing or has no Supabase URL. Ask your maintainer for a properly configured copy of the folder.
 - **"Could not reach Supabase" / submissions never seem to land.** Two possibilities, both self-healing: a real connectivity issue (queued and retried automatically), or the developer just hasn't been approved in `participants` yet — the maintainer needs to flip `approved` to `true` for that username in the Supabase Table Editor. Either way, nothing is lost; it starts flowing the moment the cause is fixed.
 - **Want to stop being surveyed on a repo?** `npx ./trust-hook uninstall`.

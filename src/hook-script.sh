@@ -34,6 +34,7 @@ const { URL } = require('url');
 const CONFIG_DIR = '__TRUST_HOOK_CONFIG_DIR__';
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const QUEUE_PATH = path.join(CONFIG_DIR, 'queue.json');
+const TOOL_DIR = '__TRUST_HOOK_TOOL_DIR__';
 
 const c = {
   reset: '\x1b[0m',
@@ -86,10 +87,14 @@ function writePersonalConfig(personal) {
 }
 
 // Project config: Supabase credentials, git-ignored and distributed
-// privately by the maintainer. Read fresh on every commit (never baked
-// into this hook file) so a credential rotation just needs a new
-// `configure`, not a reinstall.
+// privately by the maintainer. Checks the tool's own directory first
+// (pre-configured folder), then falls back to the repo root.
 function readProjectConfig(repoRoot) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(TOOL_DIR, 'trust-hook.config.json'), 'utf8'));
+  } catch (e) {
+    // not there — fall through
+  }
   if (!repoRoot) return null;
   try {
     return JSON.parse(fs.readFileSync(path.join(repoRoot, 'trust-hook.config.json'), 'utf8'));

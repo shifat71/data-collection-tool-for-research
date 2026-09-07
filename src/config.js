@@ -13,6 +13,10 @@ const QUEUE_PATH = path.join(CONFIG_DIR, 'queue.json');
 // Project config: Supabase credentials, git-ignored and distributed privately.
 const PROJECT_CONFIG_FILENAME = 'trust-hook.config.json';
 
+// The tool's own directory — config written here travels with the folder
+// when the maintainer distributes it to developers.
+const TOOL_ROOT = path.resolve(__dirname, '..');
+
 function ensureConfigDir() {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
 }
@@ -42,24 +46,25 @@ function findProjectRoot(cwd) {
   }
 }
 
-function projectConfigPath(repoRoot) {
-  return path.join(repoRoot, PROJECT_CONFIG_FILENAME);
-}
-
 function readProjectConfig(repoRoot) {
+  // Check the tool's own directory first (supports pre-configured folders).
+  try {
+    return JSON.parse(fs.readFileSync(path.join(TOOL_ROOT, PROJECT_CONFIG_FILENAME), 'utf8'));
+  } catch (e) {
+    // not there — fall through
+  }
+  // Fall back to git repo root.
   const root = repoRoot || findProjectRoot();
   if (!root) return null;
   try {
-    return JSON.parse(fs.readFileSync(projectConfigPath(root), 'utf8'));
+    return JSON.parse(fs.readFileSync(path.join(root, PROJECT_CONFIG_FILENAME), 'utf8'));
   } catch (e) {
     return null;
   }
 }
 
-function writeProjectConfig(newProjectConfig, repoRoot) {
-  const root = repoRoot || findProjectRoot();
-  if (!root) throw new Error('Not inside a git repository.');
-  const dest = projectConfigPath(root);
+function writeProjectConfig(newProjectConfig) {
+  const dest = path.join(TOOL_ROOT, PROJECT_CONFIG_FILENAME);
   fs.writeFileSync(dest, JSON.stringify(newProjectConfig, null, 2) + '\n');
   return dest;
 }
@@ -69,11 +74,11 @@ module.exports = {
   CONFIG_PATH,
   QUEUE_PATH,
   PROJECT_CONFIG_FILENAME,
+  TOOL_ROOT,
   ensureConfigDir,
   readConfig,
   writeConfig,
   findProjectRoot,
-  projectConfigPath,
   readProjectConfig,
   writeProjectConfig,
 };

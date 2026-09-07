@@ -4,22 +4,7 @@ This is the guide for developers **using** the tool on a project where it's alre
 
 ## Install
 
-Don't have the `trust-hook/` folder in your project yet? Grab it into your project root:
-
-```sh
-cd /path/to/your-project
-npx degit shifat71/data-collection-tool-for-research trust-hook
-```
-
-Would rather not use `npx degit`? A plain `git clone` works too:
-
-```sh
-git clone https://github.com/shifat71/data-collection-tool-for-research.git /tmp/trust-hook-src
-cp -r /tmp/trust-hook-src /path/to/your-project/trust-hook
-rm -rf /path/to/your-project/trust-hook/.git /tmp/trust-hook-src
-```
-
-Then install the hook — one command, from your project root:
+Your maintainer will give you a `trust-hook/` folder — it's already configured and ready to use. Drop it into your project root, then install the hook — one command:
 
 ```sh
 npx ./trust-hook

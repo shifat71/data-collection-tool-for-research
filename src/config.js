@@ -10,8 +10,7 @@ const CONFIG_DIR = path.join(os.homedir(), '.trust-hook');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const QUEUE_PATH = path.join(CONFIG_DIR, 'queue.json');
 
-// Project config: Supabase credentials, committed to the repo by the project
-// owner so every developer gets them for free just by cloning/pulling.
+// Project config: Supabase credentials, git-ignored and distributed privately.
 const PROJECT_CONFIG_FILENAME = 'trust-hook.config.json';
 
 function ensureConfigDir() {

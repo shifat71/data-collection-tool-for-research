@@ -1,10 +1,6 @@
 # trust-hook — Developer Guide
 
-This is the guide for **using** trust-hook on a project that already has it. If you need to set the tool up for a project for the first time (connect a Supabase project, create the database table), see the [main README](./README.md) instead — this page assumes that's already done, or that someone else will do it.
-
-## What it is
-
-A git `post-commit` hook. After every commit, it asks two quick questions about whether you used AI assistance, then gets out of your way. Nothing to remember day to day beyond the one install command below.
+This is the guide for developers **using** the tool on a project where it's already set up. You don't need to configure Supabase, create any tables, or deal with credentials — your maintainer has done all of that. All you do is install the hook and start working.
 
 ## Install
 
@@ -15,7 +11,15 @@ cd /path/to/your-project
 npx degit shifat71/data-collection-tool-for-research trust-hook
 ```
 
-Already there, and your maintainer has told you Supabase is connected for this project? Skip straight to installing the hook, from your project root:
+Would rather not use `npx degit`? A plain `git clone` works too:
+
+```sh
+git clone https://github.com/shifat71/data-collection-tool-for-research.git /tmp/trust-hook-src
+cp -r /tmp/trust-hook-src /path/to/your-project/trust-hook
+rm -rf /path/to/your-project/trust-hook/.git /tmp/trust-hook-src
+```
+
+Then install the hook — one command, from your project root:
 
 ```sh
 npx ./trust-hook
@@ -26,8 +30,6 @@ That's the whole install. No `npm install`, nothing else downloaded — it runs 
 The first time, it asks for a **participant alias** — any string you choose to identify your own commits in the dataset — plus a few optional details (full name, email, team/role, company) that just help your maintainer recognize you when approving your registration; press Enter to skip any of them. All of this is asked once, ever, on your machine: saved to `~/.trust-hook/config.json` and reused automatically the next time you install the hook in a different project.
 
 This also registers you with the project's Supabase database. **A maintainer has to manually approve you before your survey answers actually land in the dataset** — until then, everything still runs exactly the same on your end, your answers just queue locally and start counting automatically the moment you're approved. No message, no blocking, nothing to redo.
-
-Supabase should already be connected by the time you run this — your maintainer sets that up before your trial starts, since it can't be shared via `git pull` (see the main README). If it somehow isn't yet, the install still finishes and installs the hook — it just runs in **dry-run mode** (prints what it would send instead of sending it) until it's connected. That's not something you need to fix yourself; ping your project maintainer, and once they (or you, if they hand you the credentials) run `npx ./trust-hook configure`, your next commit picks it up automatically — no reinstall needed.
 
 ## What happens after a commit
 
@@ -79,7 +81,7 @@ Removes the hook from this repo. If it replaced a pre-existing `post-commit` hoo
 | Symptom | What's happening |
 |---|---|
 | Nothing happens after a commit | Check `.git/hooks/post-commit` exists and mentions `trust-hook`, and that `node` is on your `PATH`. Both are required for the hook to run at all. |
-| The JSON payload gets printed to your terminal instead of sent | Dry-run mode — the project isn't connected to Supabase yet. Nothing wrong on your end. |
+| The JSON payload gets printed to your terminal instead of sent | Dry-run mode — the project isn't connected to Supabase yet. Nothing wrong on your end — let your maintainer know. |
 | "Could not reach Supabase" message | Queued locally, retried automatically on your next commit. No action needed. |
 | Submissions never seem to land, even though nothing looks wrong | You probably haven't been approved by your maintainer yet — ask them to check the `participants` table. Your answers are queued locally and will start counting the moment you're approved; nothing to redo. |
 | Want out entirely | `npx ./trust-hook uninstall` |

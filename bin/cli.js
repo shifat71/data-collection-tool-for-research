@@ -46,8 +46,7 @@ function defaultAlias() {
 }
 
 // Prompts for Supabase credentials, writes them to the project config, and
-// runs a connectivity check. Shared by the explicit `configure` command and
-// by `init`'s automatic first-run setup.
+// runs a connectivity check. Used by the `configure` command (maintainer-facing).
 async function promptAndWriteProjectConfig(repoRoot, existing) {
   const rl = createPrompt();
 
@@ -85,13 +84,14 @@ async function promptAndWriteProjectConfig(repoRoot, existing) {
     console.log(result.ok ? `${colors.green}OK${colors.reset}` : `${colors.yellow}could not confirm (${result.error || result.status || 'unknown error'})${colors.reset}`);
   }
 
-  console.log(`${colors.yellow}Do not commit ${config.PROJECT_CONFIG_FILENAME}${colors.reset}${colors.dim} — it's git-ignored on purpose. Share the URL and anon key above with your team through a private channel (Slack DM, password manager, etc.); each teammate then runs ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.dim} with the same two values.${colors.reset}`);
+  console.log(`${colors.yellow}Do not commit ${config.PROJECT_CONFIG_FILENAME}${colors.reset}${colors.dim} — it's git-ignored on purpose.${colors.reset}`);
+  console.log(`${colors.dim}To set up each developer's machine, either run this same command there yourself, or share the URL and key privately so they can run it.${colors.reset}`);
 
   return newProjectConfig;
 }
 
-// Explicit command for rotating credentials later without touching the
-// hook install or personal alias.
+// Maintainer-facing command: set or rotate Supabase credentials without
+// touching the hook install or developer profiles.
 async function configureProject() {
   const repoRoot = config.findProjectRoot();
   if (!repoRoot) {
@@ -99,8 +99,8 @@ async function configureProject() {
     process.exit(1);
   }
 
-  console.log(`${colors.bold}${colors.cyan}trust-hook project setup${colors.reset}`);
-  console.log(`${colors.dim}Stores Supabase credentials locally (not committed — this repo may be public).${colors.reset}\n`);
+  console.log(`${colors.bold}${colors.cyan}trust-hook — maintainer setup${colors.reset}`);
+  console.log(`${colors.dim}Stores Supabase credentials locally (never committed). Run this before developers install.${colors.reset}\n`);
 
   const existing = config.readProjectConfig(repoRoot) || {};
   await promptAndWriteProjectConfig(repoRoot, existing);
@@ -134,10 +134,8 @@ async function registerParticipant(projectConfig, personal) {
   return result.ok;
 }
 
-// Developer-facing, single step: install the hook. Project credentials
-// live in a git-ignored local file (not committed — see promptAndWrite-
-// ProjectConfig) that the maintainer is expected to have set up via
-// `configure` before a developer ever runs this.
+// Developer-facing: install the hook. The maintainer is expected to have
+// already connected Supabase via `configure` before a developer runs this.
 async function init() {
   const gitDir = findGitDir();
   if (!gitDir) {
@@ -157,10 +155,10 @@ async function init() {
   const repoRoot = config.findProjectRoot();
   const projectConfig = config.readProjectConfig(repoRoot);
   if (projectConfig && projectConfig.supabaseUrl) {
-    console.log(`${colors.green}✓${colors.reset} Found project Supabase config at ${colors.dim}${config.PROJECT_CONFIG_FILENAME}${colors.reset} — nothing else to set up.`);
+    console.log(`${colors.green}✓${colors.reset} Supabase is connected — ready to go.`);
   } else {
-    console.log(`${colors.yellow}No local ${config.PROJECT_CONFIG_FILENAME} found for this repo — running in dry-run mode.${colors.reset}`);
-    console.log(`${colors.dim}Ask your project maintainer for the Supabase URL and anon key, then run ${colors.reset}${colors.cyan}npx ./trust-hook configure${colors.reset}${colors.dim}.${colors.reset}`);
+    console.log(`${colors.yellow}Supabase is not connected yet — the hook will run in dry-run mode until it is.${colors.reset}`);
+    console.log(`${colors.dim}Ask your project maintainer to set it up for you (they'll know what to do).${colors.reset}`);
   }
 
   let personal = config.readConfig();
@@ -254,11 +252,13 @@ function uninstall() {
 
 function printHelp() {
   console.log(`${colors.bold}trust-hook${colors.reset} — developer trust measurement tool\n`);
-  console.log('Usage:');
-  console.log('  npx ./trust-hook              Install the hook (default). Expects Supabase to already be connected — run `configure` first if not.');
+  console.log('Developer commands:');
+  console.log('  npx ./trust-hook              Install the hook (default)');
   console.log('  npx ./trust-hook init         Same as above');
-  console.log('  npx ./trust-hook configure    Set or rotate this project\'s Supabase credentials — run this before a developer\'s first install');
   console.log('  npx ./trust-hook uninstall    Remove the hook from this repo');
+  console.log('');
+  console.log('Maintainer commands:');
+  console.log('  npx ./trust-hook configure    Set or rotate Supabase credentials (run before developers install)');
 }
 
 async function main() {

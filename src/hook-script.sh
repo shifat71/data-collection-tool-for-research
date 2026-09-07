@@ -85,9 +85,10 @@ function writePersonalConfig(personal) {
   }
 }
 
-// Project config: Supabase credentials, committed to the repo by the
-// project owner. Read fresh on every commit (never baked into this hook
-// file) so a credential rotation just needs a `git pull`, not a reinstall.
+// Project config: Supabase credentials, git-ignored and distributed
+// privately by the maintainer. Read fresh on every commit (never baked
+// into this hook file) so a credential rotation just needs a new
+// `configure`, not a reinstall.
 function readProjectConfig(repoRoot) {
   if (!repoRoot) return null;
   try {
